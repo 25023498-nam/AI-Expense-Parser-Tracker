@@ -42,7 +42,16 @@ if draft and cung_file:
 
     col1, col2 = st.columns(2)
     ten = col1.text_input("Tên cửa hàng", value=str(draft.get("ten_cua_hang", "")))
-    ngay = col2.text_input("Ngày (YYYY-MM-DD)", value=str(draft.get("ngay_thanh_toan", "")))
+    ngay_ai = draft.get("ngay_thanh_toan")
+
+    # Đổi None, "None" và "null" thành ô trống
+    if ngay_ai is None or str(ngay_ai).strip().lower() in {"none", "null"}:
+        ngay_ai = ""
+
+    ngay = col2.text_input(
+        "Ngày (YYYY-MM-DD)",
+        value=str(ngay_ai)
+    )
     tong = col1.number_input(
         "Tổng tiền (đ)", min_value=0, step=1000, value=safe_int(draft.get("tong_tien"))
     )
@@ -58,28 +67,53 @@ if draft and cung_file:
     items = st.data_editor(items_df, num_rows="dynamic", key="items")
 
     # ---------- Bước 3: kiểm tra và lưu ----------
-    if st.button("Xác nhận và lưu"):
-        try:
-            datetime.strptime(ngay, "%Y-%m-%d")
-        except ValueError:
-            st.error("Ngày phải đúng dạng YYYY-MM-DD, ví dụ 2025-01-15.")
-        else:
-            mon = (
-                items.dropna(subset=["ten_mon"])
-                .assign(gia=lambda d: pd.to_numeric(d["gia"], errors="coerce").fillna(0).astype(int))
-                .to_dict("records")
-            )
-            save_expense({
-                "ngay_thanh_toan": ngay,
-                "ten_cua_hang": ten,
-                "tong_tien": tong,
-                "danh_muc": danh_muc,
-                "danh_sach_mon": mon,
-            })
-            st.session_state.pop("draft", None)
-            st.session_state.pop("draft_file", None)
-            st.success("Đã lưu hóa đơn vào sổ.")
+    if st.button("Xác nhận và lưu", key="xac_nhan_luu"):
+    # Làm sạch ngày
+        ngay = ngay.strip()
 
+        if ngay.lower() in {"none", "null"}:
+            ngay = ""
+
+        # Chỉ kiểm tra nếu có nhập ngày
+        if ngay:
+            try:
+                datetime.strptime(ngay, "%Y-%m-%d")
+            except ValueError:
+                st.error(
+                    "Ngày phải đúng dạng YYYY-MM-DD, ví dụ 2025-01-15."
+                )
+                st.stop()
+
+        # Xử lý danh sách món
+        mon = (
+            items.dropna(subset=["ten_mon"])
+            .assign(
+                gia=lambda d: pd.to_numeric(
+                    d["gia"],
+                    errors="coerce"
+                ).fillna(0).astype(int)
+            )
+            .to_dict("records")
+        )
+
+        # Dữ liệu chuẩn bị lưu
+        hoa_don_moi = {
+            "ngay_thanh_toan": ngay or None,
+            "ten_cua_hang": ten,
+            "tong_tien": tong,
+            "danh_muc": danh_muc,
+            "danh_sach_mon": mon,
+        }
+
+        # Ghi thật vào CSV
+        save_expense(hoa_don_moi)
+
+        # Chỉ xóa bản nháp sau khi đã ghi CSV
+        st.session_state.pop("draft", None)
+        st.session_state.pop("draft_file", None)
+
+        # Chỉ hiện thành công sau khi save_expense chạy xong
+        st.success("Đã lưu hóa đơn vào sổ.")
 # ---------- Chân trang ----------
 st.divider()
 so = load_expenses()

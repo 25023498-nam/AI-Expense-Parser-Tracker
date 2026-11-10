@@ -14,15 +14,38 @@ load_dotenv(BASE_DIR / ".env")
 MODEL_NAME = "gemini-flash-lite-latest"
 
 PROMPT = """
-Bạn là hệ thống trích xuất dữ liệu hóa đơn. Hãy đọc ảnh và trả về dữ liệu dạng JSON thuần túy,
-không chứa markdown ```json, không kèm câu chào hỏi, với cấu trúc sau:
+Bạn là hệ thống trích xuất dữ liệu từ ảnh hóa đơn, biên lai và chứng từ thanh toán.
+
+Hãy đọc ảnh và chỉ trả về một đối tượng JSON hợp lệ.
+Không sử dụng markdown ```json, không giải thích và không thêm lời chào.
+
+Quy tắc:
+1. "ten_cua_hang" là tên cửa hàng, siêu thị, nhà hàng hoặc đơn vị cung cấp dịch vụ.
+   Ví dụ: EVN, công ty nước, nhà mạng, bệnh viện hoặc trường học.
+2. Nếu không xác định được giá trị nào, trả về null, không tự suy đoán.
+3. "ngay_thanh_toan" là ngày khách hàng thực sự thanh toán.
+   Nếu ảnh chỉ có ngày phát hành hoặc hạn thanh toán mà không có ngày thanh toán, trả về null.
+4. Ngày phải có định dạng YYYY-MM-DD.
+5. "tong_tien" là số tiền cuối cùng khách hàng phải trả hoặc đã trả.
+6. Các giá tiền phải là số, không chứa dấu chấm phân cách, ký hiệu tiền tệ hoặc chữ.
+7. "danh_muc" chỉ nhận một trong các giá trị:
+   "Ăn uống", "Mua sắm", "Di chuyển", "Hóa đơn & tiện ích",
+   "Y tế", "Giáo dục", "Giải trí", "Khác".
+8. Với hóa đơn dịch vụ không có danh sách món, hãy tạo một mục mô tả dịch vụ.
+   Ví dụ: "Tiền điện tháng 10/2026", "Cước Internet tháng 10/2026".
+9. Không được tự tạo thông tin không xuất hiện hoặc không thể suy ra chắc chắn từ ảnh.
+
+Cấu trúc JSON:
 {
-  "ten_cua_hang": "Tên cửa hàng/siêu thị",
-  "ngay_thanh_toan": "YYYY-MM-DD",
+  "ten_cua_hang": "Tên cửa hàng hoặc đơn vị cung cấp dịch vụ",
+  "ngay_thanh_toan": "YYYY-MM-DD hoặc null",
   "tong_tien": 0,
-  "danh_muc": "Ăn uống/Mua sắm/Di chuyển/Khác",
+  "danh_muc": "Một trong các danh mục quy định",
   "danh_sach_mon": [
-    {"ten_mon": "tên item", "gia": 0}
+    {
+      "ten_mon": "Tên mặt hàng hoặc nội dung dịch vụ",
+      "gia": 0
+    }
   ]
 }
 """
