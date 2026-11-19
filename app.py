@@ -2,9 +2,39 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+import base64
 
+from pathlib import Path
 from utils.ai_core import extract_invoice_data
 from utils.data_core import load_expenses, save_expense
+
+def set_background():
+    def png_url(filename):
+        path = Path(__file__).resolve().parent / filename
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f'url("data:image/png;base64,{encoded}")'
+
+    light = png_url("light_background.png")
+    dark = png_url("dark_background.png")
+    initial = dark if st.context.theme.type == "dark" else light
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: {initial};
+            background-image: light-dark({light}, {dark});
+            background-size: 100% 100%;
+            background-position: top center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        </style> 
+        """,
+            unsafe_allow_html=True
+    )
+
+set_background() 
 
 DANH_MUC = ["Ăn uống", "Mua sắm", "Di chuyển", "Khác"]
 
@@ -17,21 +47,87 @@ def safe_int(value):
     return int(digits) if digits else 0
 
 
-st.set_page_config(page_title="AI Expense Tracker", page_icon="🧾")
-st.title("🧾 Nhập hóa đơn")
+st.set_page_config(page_title="AI Expense Tracker", page_icon="🧾", layout ="centered")
+st.markdown(
+    """
+    <style>
+        .hero {
+            padding: 24px 28px;
+            margin-bottom: 24px;
+            border-radius: 20px;
+            background: linear-gradient(
+                110deg,
+                light-dark(#DED8F8, #25263D) 0%,
+                light-dark(#E8F5FF, #1D3042) 100%
+            );
+            border: 1px solid light-dark(#DED9FF, #484C68);
+            box-shadow: 0 8px 24px rgba(76, 81, 191, 0.08);
+        }
+
+        .hero-title {
+            color: light-dark(#252B48, #F6F4FF);
+            font-size: 36px;
+            font-weight: 750;
+            margin: 0;
+        }
+
+        .hero-description {
+            color: light-dark(#525E73, #CBD5E1);
+            font-size: 16px;
+            margin: 8px 0 0 0;
+        }
+
+        .section-label {
+            color: light-dark(#5548C8, #C3BCFF);
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+    </style>
+
+    <div class="hero">
+        <p class="section-label">AI Expense Parser</p>
+        <h1 class="hero-title">🧾 Nhập hóa đơn</h1>
+        <p class="hero-description">
+            Tải ảnh lên, để AI trích xuất và quản lý chi tiêu của bạn.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+#st.title("🧾 Nhập hóa đơn")
 
 # ---------- Bước 1: tải ảnh và gọi AI ----------
-uploaded = st.file_uploader("Chọn ảnh hóa đơn", type=["png", "jpg", "jpeg"])
+with st.container(border=True):
+    st.subheader("1. Tải ảnh hóa đơn")
 
-if uploaded is not None and st.button("Trích xuất bằng AI"):
-    uploaded.seek(0)  # tua băng về đầu trước khi đọc
-    with st.spinner("Đang đọc hóa đơn..."):
-        try:
-            st.session_state["draft"] = extract_invoice_data(uploaded)
-            st.session_state["draft_file"] = uploaded.name
-            st.session_state.pop("items", None)  # xóa bảng món cũ
-        except Exception as e:
-            st.error(f"Không đọc được hóa đơn: {e}")
+    uploaded = st.file_uploader(
+        "Chọn ảnh PNG, JPG hoặc JPEG",
+        type=["png", "jpg", "jpeg"]
+    )
+
+    trich_xuat = st.button(
+        "✨ Trích xuất bằng AI",
+        type="primary",
+        use_container_width=True,
+        disabled=uploaded is None
+    )
+
+    if uploaded is not None and trich_xuat:
+        # Đưa con trỏ về đầu file trước khi đọc
+        uploaded.seek(0)
+
+        with st.spinner("AI đang đọc hóa đơn..."):
+            try:
+                st.session_state["draft"] = extract_invoice_data(uploaded)
+                st.session_state["draft_file"] = uploaded.name
+
+                # Xóa bảng món của hóa đơn cũ
+                st.session_state.pop("items", None)
+
+            except Exception as e:
+                st.error(f"Không đọc được hóa đơn: {e}")
 
 # ---------- Bước 2: hiện form để sửa ----------
 draft = st.session_state.get("draft")
