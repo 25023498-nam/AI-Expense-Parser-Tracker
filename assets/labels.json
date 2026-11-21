@@ -1,0 +1,20 @@
+{
+  "an_uong.png": {
+    "ten_cua_hang": "TEXAS CHICKEN",
+    "ngay_thanh_toan": "2026-11-03",
+    "tong_tien": 99000,
+    "danh_muc": "Ăn uống"
+  },
+  "sieu_thi.png": {
+    "ten_cua_hang": "Happy Mart Terra An Hưng",
+    "ngay_thanh_toan": "2026-08-13",
+    "tong_tien": 185450,
+    "danh_muc": "Mua sắm"
+  },
+  "nghieng.png": {
+    "ten_cua_hang": "EasyMart Terra V2",
+    "ngay_thanh_toan": "2026-08-21",
+    "tong_tien": 103040,
+    "danh_muc": "Mua sắm"
+  }
+}
