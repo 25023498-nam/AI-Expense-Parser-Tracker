@@ -11,7 +11,7 @@ from PIL import Image
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-MODEL_NAME = "gemini-flash-lite-latest"
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 PROMPT = """
 Bạn là hệ thống trích xuất dữ liệu từ ảnh hóa đơn, biên lai và chứng từ thanh toán.
@@ -60,12 +60,62 @@ def get_client():
 
 def extract_invoice_data(image_path):
     """Đọc ảnh hóa đơn và trả về dict theo schema đã định nghĩa."""
-    client = get_client()
-    img = Image.open(image_path).convert("RGB")
+    with Image.open(image_path) as image:
+        return _generate_json([image.convert("RGB"), PROMPT])
 
+
+def extract_invoice_batch(files):
+    """Đọc nhiều ảnh trong một yêu cầu, ghép kết quả bằng ID của ảnh."""
+    rules = PROMPT.replace(
+        "Hãy đọc ảnh và chỉ trả về một đối tượng JSON hợp lệ.",
+        "Áp dụng các quy tắc và cấu trúc hóa đơn dưới đây riêng cho từng ảnh.",
+    )
+    contents = [
+        rules
+        + '\nTrả về một mảng JSON. Mỗi phần tử có "image_id" đúng như nhãn ngay trước ảnh '
+        + 'và "invoice" là đối tượng hóa đơn theo cấu trúc trên. Nếu không đọc được, '
+        + 'đặt "invoice" thành null. Trả về đúng một phần tử cho mỗi ID, không gộp ảnh.'
+    ]
+    expected = set()
+    for image_id, uploaded in files.items():
+        uploaded.seek(0)
+        try:
+            with Image.open(uploaded) as image:
+                rgb = image.convert("RGB")
+        except (OSError, ValueError, Image.DecompressionBombError):
+            continue
+        contents.extend([f"image_id: {image_id}", rgb])
+        expected.add(image_id)
+
+    if not expected:
+        return {}
+    response = _generate_json(contents)
+    if not isinstance(response, list):
+        raise ValueError("AI không trả về danh sách kết quả cho nhóm ảnh.")
+
+    invoices = {}
+    seen = set()
+    for result in response:
+        if not isinstance(result, dict):
+            continue
+        image_id = result.get("image_id")
+        if not isinstance(image_id, str) or image_id not in expected:
+            continue
+        if image_id in seen:
+            invoices.pop(image_id, None)
+            continue
+        seen.add(image_id)
+        invoice = result.get("invoice")
+        if isinstance(invoice, dict) and invoice:
+            invoices[image_id] = invoice
+    return invoices
+
+
+def _generate_json(contents):
+    client = get_client()
     response = client.models.generate_content(
         model=MODEL_NAME,
-        contents=[img, PROMPT],
+        contents=contents,
         config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
 
