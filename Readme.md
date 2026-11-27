@@ -248,3 +248,6 @@ AI-Expense-Parser-Tracker/
 ## Giấy phép và thông tin nhóm
 
 Dự án phục vụ mục đích học tập trong học phần Trí tuệ nhân tạo.
+
+**Nhóm 18**
+- Thành viên: [điền họ tên và MSSV]
