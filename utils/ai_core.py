@@ -1,47 +1,79 @@
 import os
 import json
-from google import genai
+from pathlib import Path
+
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from PIL import Image
 
-# 1. Load API Key từ file .env
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+# Đường dẫn tuyệt đối đến thư mục gốc dự án (file này nằm trong utils/)
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-client = genai.Client(api_key=api_key)
+MODEL_NAME = "gemini-flash-lite-latest"
+
+PROMPT = """
+Bạn là hệ thống trích xuất dữ liệu từ ảnh hóa đơn, biên lai và chứng từ thanh toán.
+
+Hãy đọc ảnh và chỉ trả về một đối tượng JSON hợp lệ.
+Không sử dụng markdown ```json, không giải thích và không thêm lời chào.
+
+Quy tắc:
+1. "ten_cua_hang" là tên cửa hàng, siêu thị, nhà hàng hoặc đơn vị cung cấp dịch vụ.
+   Ví dụ: EVN, công ty nước, nhà mạng, bệnh viện hoặc trường học.
+2. Nếu không xác định được giá trị nào, trả về null, không tự suy đoán.
+3. "ngay_thanh_toan" là ngày khách hàng thực sự thanh toán.
+   Nếu ảnh chỉ có ngày phát hành hoặc hạn thanh toán mà không có ngày thanh toán, trả về null.
+4. Ngày phải có định dạng YYYY-MM-DD.
+5. "tong_tien" là số tiền cuối cùng khách hàng phải trả hoặc đã trả.
+6. Các giá tiền phải là số, không chứa dấu chấm phân cách, ký hiệu tiền tệ hoặc chữ.
+7. "danh_muc" chỉ nhận một trong các giá trị:
+   "Ăn uống", "Mua sắm", "Di chuyển", "Hóa đơn & tiện ích",
+   "Y tế", "Giáo dục", "Giải trí", "Khác".
+8. Với hóa đơn dịch vụ không có danh sách món, hãy tạo một mục mô tả dịch vụ.
+   Ví dụ: "Tiền điện tháng 10/2026", "Cước Internet tháng 10/2026".
+9. Không được tự tạo thông tin không xuất hiện hoặc không thể suy ra chắc chắn từ ảnh.
+
+Cấu trúc JSON:
+{
+  "ten_cua_hang": "Tên cửa hàng hoặc đơn vị cung cấp dịch vụ",
+  "ngay_thanh_toan": "YYYY-MM-DD hoặc null",
+  "tong_tien": 0,
+  "danh_muc": "Một trong các danh mục quy định",
+  "danh_sach_mon": [
+    {
+      "ten_mon": "Tên mặt hàng hoặc nội dung dịch vụ",
+      "gia": 0
+    }
+  ]
+}
+"""
+
+
+def get_client():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Chưa có GEMINI_API_KEY. Hãy tạo file .env theo hướng dẫn trong README.")
+    return genai.Client(api_key=api_key)
+
 
 def extract_invoice_data(image_path):
-    # Mở file ảnh
-    img = Image.open(image_path)
-    
-    # Kỹ thuật Prompt ép AI trả về chuẩn JSON
-    prompt = """
-    Bạn là hệ thống trích xuất dữ liệu hóa đơn. Hãy đọc ảnh và trả về dữ liệu dạng JSON thuần túy (không chứa markdown ```json, không kèm câu chào hỏi) với cấu trúc sau:
-    {
-      "ten_cua_hang": "Tên cửa hàng/siêu thị",
-      "ngay_thanh_toan": "YYYY-MM-DD",
-      "tong_tien": 0,
-      "danh_muc": "Ăn uống/Mua sắm/Di chuyển/Khác",
-      "danh_sach_mon": [
-        {"ten_mon": "tên item", "gia": 0}
-      ]
-    }
-    """
-    
-    # Gửi ảnh và yêu cầu trích xuất đến Gemini
-    response = client.models.generate_content(
-        model="gemini-flash-lite-latest",
-        contents=[img, prompt]
-    )
-    
-    return response.text
+    """Đọc ảnh hóa đơn và trả về dict theo schema đã định nghĩa."""
+    client = get_client()
+    img = Image.open(image_path).convert("RGB")
 
-# --- CHẠY TEST TRỰC TIẾP ---
-if __name__ == "__main__":
-    test_image = r"assets/nghieng.png"  # Thay đường dẫn ảnh của bạn
-    print("Đang gửi ảnh lên Gemini API...")
-    result = extract_invoice_data(test_image)
-    print("\n--- KẾT QUẢ AI TRẢ VỀ ---")
-    print(result)
-    hoa_don = json.loads(result)
-    print("JSON hợp lệ, tổng tiền:", hoa_don["tong_tien"])
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=[img, PROMPT],
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
+
+    text = (response.text or "").strip()
+    # Dự phòng: bỏ markdown nếu mô hình vẫn trả về ```json
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"AI trả về không phải JSON hợp lệ: {text[:200]}") from e
