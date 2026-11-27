@@ -77,18 +77,3 @@ def extract_invoice_data(image_path):
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise ValueError(f"AI trả về không phải JSON hợp lệ: {text[:200]}") from e
-
-
-# --- CHẠY TEST TRỰC TIẾP ---
-if __name__ == "__main__":
-    test_image = BASE_DIR / "assets" / "nghieng.png"
-    print("Đang gửi ảnh lên Gemini API...")
-    try:
-        hoa_don = extract_invoice_data(test_image)
-    except Exception as e:
-        print("Lỗi:", e)
-        raise SystemExit(1)
-
-    print("\n--- KẾT QUẢ AI TRẢ VỀ ---")
-    print(json.dumps(hoa_don, ensure_ascii=False, indent=2))
-    print("Tổng tiền:", hoa_don.get("tong_tien"))
